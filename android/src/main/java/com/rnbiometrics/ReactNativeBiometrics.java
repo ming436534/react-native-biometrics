@@ -6,6 +6,8 @@ import android.app.KeyguardManager;
 import android.content.Context;
 import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
@@ -30,6 +32,7 @@ import java.security.spec.RSAKeyGenParameterSpec;
 public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
 
     protected String biometricKeyAlias = "biometric_key";
+    public static final long SUCCESS_DELAY_MILLIS = 500;
 
     public ReactNativeBiometrics(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -172,13 +175,25 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
         };
     }
 
+    protected void resolveSuccessPromise(final String resolvedKey, final Promise promise) {
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                promise.resolve(resolvedKey);
+            }
+        }, SUCCESS_DELAY_MILLIS);
+    }
+
     protected ReactNativeBiometricsCallback getCreationCallback(final Promise promise, final boolean withKey) {
         return new ReactNativeBiometricsCallback() {
+            boolean isResolved = false;
             @Override
             @TargetApi(Build.VERSION_CODES.M)
             public void onAuthenticated(FingerprintManager.CryptoObject cryptoObject) {
+                if (isResolved) return;
                 if (!withKey) {
-                    promise.resolve(null);
+                    isResolved = true;
+                    resolveSuccessPromise(null, promise);
                     return;
                 }
                 try {
@@ -197,20 +212,28 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
                     byte[] encodedPublicKey = publicKey.getEncoded();
                     String publicKeyString = Base64.encodeToString(encodedPublicKey, Base64.DEFAULT);
                     publicKeyString = publicKeyString.replaceAll("\r", "").replaceAll("\n", "");
-                    promise.resolve(publicKeyString);
+                    isResolved = true;
+                    resolveSuccessPromise(publicKeyString, promise);
                 } catch (Exception e) {
+                    isResolved = true;
                     promise.reject("error generating public private keys: " + e.getMessage(), "error generating public private keys");
                 }
             }
 
             @Override
             public void onCancel() {
-                promise.reject("User cancelled fingerprint authorization", "User cancelled fingerprint authorization");
+                if (!isResolved) {
+                    isResolved = true;
+                    promise.reject("User cancelled fingerprint authorization", "User cancelled fingerprint authorization");
+                }
             }
 
             @Override
             public void onError() {
-                promise.reject("error generating public private keys" , "error generating public private keys");
+                if (!isResolved) {
+                    isResolved = true;
+                    promise.reject("error generating public private keys" , "error generating public private keys");
+                }
             }
         };
     }
