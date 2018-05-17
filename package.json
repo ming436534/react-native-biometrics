@@ -5,6 +5,7 @@
   "main": "lib/index.js",
   "scripts": {
     "build": "babel src -d lib",
+    "postinstall": "babel src -d lib",
     "release": "npm run build && npm publish"
   },
   "keywords": [
