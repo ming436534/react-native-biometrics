@@ -64,13 +64,27 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
             promise.reject("Error detecting fingerprint availability: " + e.getMessage(), "Error detecting fingerprint availability");
         }
     }
-
+    @ReactMethod
+    public void authenticate(String title, Promise promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ReactNativeBiometricsDialog dialog = new ReactNativeBiometricsDialog();
+                dialog.init(title, null, getCreationCallback(promise, false));
+                Activity activity = getCurrentActivity();
+                dialog.show(activity.getFragmentManager(), "fingerprint_dialog");
+            } else {
+                promise.reject("cannot generate keys on android versions below 6.0", "cannot generate keys on android versions below 6.0");
+            }
+        } catch (Exception e) {
+            promise.reject("error generating public private keys: " + e.getMessage(), "error generating public private keys");
+        }
+    }
     @ReactMethod
     public void createKeys(String title, Promise promise) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 ReactNativeBiometricsDialog dialog = new ReactNativeBiometricsDialog();
-                dialog.init(title, null, getCreationCallback(promise));
+                dialog.init(title, null, getCreationCallback(promise, true));
                 Activity activity = getCurrentActivity();
                 dialog.show(activity.getFragmentManager(), "fingerprint_dialog");
             } else {
@@ -158,11 +172,15 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
         };
     }
 
-    protected ReactNativeBiometricsCallback getCreationCallback(final Promise promise) {
+    protected ReactNativeBiometricsCallback getCreationCallback(final Promise promise, final boolean withKey) {
         return new ReactNativeBiometricsCallback() {
             @Override
             @TargetApi(Build.VERSION_CODES.M)
             public void onAuthenticated(FingerprintManager.CryptoObject cryptoObject) {
+                if (!withKey) {
+                    promise.resolve(null);
+                    return;
+                }
                 try {
                     deleteBiometricKey();
                     KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore");

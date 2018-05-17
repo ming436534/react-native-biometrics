@@ -21,6 +21,15 @@ export default {
   },
   /**
    * Prompts user with bioemtrics dialog using the passed in prompt message and
+   * returns promise that resolves when success
+   * @param {string} promptMessage
+   * @returns {Promise}  Promise that resolves when success
+   */
+  authenticate: (promptMessage) => {
+    return ReactNativeBiometrics.authenticate(promptMessage)
+  },
+  /**
+   * Prompts user with bioemtrics dialog using the passed in prompt message and
    * returns promise that resolves to newly generated public keys
    * @param {string} promptMessage
    * @returns {Promise}  Promise that resolves to newly generated public key
