@@ -16,7 +16,6 @@ import com.rnbiometrics.R;
 public class ReactNativeBiometricsHelper extends FingerprintManager.AuthenticationCallback {
 
     private static final long ERROR_TIMEOUT_MILLIS = 1600;
-    private static final long SUCCESS_DELAY_MILLIS = 1300;
 
     private final FingerprintManager fingerprintManager;
     private final ImageView icon;
@@ -80,12 +79,7 @@ public class ReactNativeBiometricsHelper extends FingerprintManager.Authenticati
         icon.setImageResource(R.drawable.ic_fingerprint_success);
         errorTextView.setTextColor(errorTextView.getResources().getColor(R.color.success_color, null));
         errorTextView.setText(errorTextView.getResources().getString(R.string.fingerprint_recognized));
-        icon.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                callback.onAuthenticated(result.getCryptoObject());
-            }
-        }, SUCCESS_DELAY_MILLIS);
+        callback.onAuthenticated(result.getCryptoObject());
     }
 
     private void showError(CharSequence error) {
