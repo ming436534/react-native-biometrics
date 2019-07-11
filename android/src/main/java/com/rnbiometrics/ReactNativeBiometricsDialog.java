@@ -8,8 +8,6 @@ import android.content.DialogInterface;
 import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -43,9 +41,6 @@ public class ReactNativeBiometricsDialog extends DialogFragment implements React
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // Do not create a new Fragment when the Activity is re-created such as orientation changes.
-        setRetainInstance(true);
         setStyle(DialogFragment.STYLE_NORMAL, R.style.BiometricsDialog);
     }
 
@@ -102,23 +97,24 @@ public class ReactNativeBiometricsDialog extends DialogFragment implements React
     // ReactNativeBiometricsCallback methods
     @Override
     public void onAuthenticated(FingerprintManager.CryptoObject cryptoObject) {
-        biometricAuthCallback.onAuthenticated(cryptoObject);
-        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                dismissAllowingStateLoss();
-            }
-        }, ReactNativeBiometrics.SUCCESS_DELAY_MILLIS);
+        dismissAllowingStateLoss();
+        if (biometricAuthCallback != null) {
+            biometricAuthCallback.onAuthenticated(cryptoObject);
+        }
     }
 
     @Override
     public void onCancel() {
-        biometricAuthCallback.onCancel();
+        if (biometricAuthCallback != null) {
+            biometricAuthCallback.onCancel();
+        }
     }
 
     @Override
     public void onError() {
         dismissAllowingStateLoss();
-        biometricAuthCallback.onError();
+        if (biometricAuthCallback != null) {
+            biometricAuthCallback.onError();
+        }
     }
 }

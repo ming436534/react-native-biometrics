@@ -6,10 +6,9 @@ import android.app.KeyguardManager;
 import android.content.Context;
 import android.hardware.fingerprint.FingerprintManager;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
+import android.text.TextUtils;
 import android.util.Base64;
 
 import com.facebook.react.bridge.Promise;
@@ -32,7 +31,6 @@ import java.security.spec.RSAKeyGenParameterSpec;
 public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
 
     protected String biometricKeyAlias = "biometric_key";
-    public static final long SUCCESS_DELAY_MILLIS = 500;
 
     public ReactNativeBiometrics(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -67,44 +65,42 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
             promise.reject("Error detecting fingerprint availability: " + e.getMessage(), "Error detecting fingerprint availability");
         }
     }
-    @ReactMethod
-    public void authenticate(String title, Promise promise) {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                ReactNativeBiometricsDialog dialog = new ReactNativeBiometricsDialog();
-                dialog.init(title, null, getCreationCallback(promise, false));
-                Activity activity = getCurrentActivity();
-                dialog.show(activity.getFragmentManager(), "fingerprint_dialog");
-            } else {
-                promise.reject("cannot generate keys on android versions below 6.0", "cannot generate keys on android versions below 6.0");
-            }
-        } catch (Exception e) {
-            promise.reject("error generating public private keys: " + e.getMessage(), "error generating public private keys");
-        }
-    }
+
     @ReactMethod
     public void createKeys(String title, Promise promise) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                ReactNativeBiometricsDialog dialog = new ReactNativeBiometricsDialog();
-                dialog.init(title, null, getCreationCallback(promise, true));
-                Activity activity = getCurrentActivity();
-                dialog.show(activity.getFragmentManager(), "fingerprint_dialog");
+                if (TextUtils.isEmpty(title)) {
+                    // if no title is provided for the create keys prompt, treat the action as
+                    // authenticated and create keys
+                    ReactNativeBiometricsCallback createKeysCallback = getCreationCallback(promise);
+                    createKeysCallback.onAuthenticated(null);
+                } else {
+                    ReactNativeBiometricsDialog dialog = new ReactNativeBiometricsDialog();
+                    dialog.init(title, null, getCreationCallback(promise));
+                    Activity activity = getCurrentActivity();
+                    dialog.show(activity.getFragmentManager(), "fingerprint_dialog");
+                }
             } else {
-                promise.reject("cannot generate keys on android versions below 6.0", "cannot generate keys on android versions below 6.0");
+                promise.reject("Cannot generate keys on android versions below 6.0", "Cannot generate keys on android versions below 6.0");
             }
         } catch (Exception e) {
-            promise.reject("error generating public private keys: " + e.getMessage(), "error generating public private keys");
+            promise.reject("Error generating public private keys: " + e.getMessage(), "Error generating public private keys");
         }
     }
 
     @ReactMethod
     public void deleteKeys(Promise promise) {
-        boolean deletionSuccessful = deleteBiometricKey();
-        if (deletionSuccessful) {
-            promise.resolve(true);
+        if (biometricKeyExists()) {
+            boolean deletionSuccessful = deleteBiometricKey();
+
+            if (deletionSuccessful) {
+                promise.resolve(true);
+            } else {
+                promise.reject("Error deleting biometric key from keystore", "Error deleting biometric key from keystore");
+            }
         } else {
-            promise.reject("Error deleting biometric key from keystore", "Error deleting biometric key from keystore");
+            promise.resolve(false);
         }
     }
 
@@ -127,11 +123,38 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
                 Activity activity = getCurrentActivity();
                 dialog.show(activity.getFragmentManager(), "fingerprint_dialog");
             } else {
-                promise.reject("cannot generate keys on android versions below 6.0", "cannot generate keys on android versions below 6.0");
+                promise.reject("Cannot generate keys on android versions below 6.0", "Cannot generate keys on android versions below 6.0");
             }
         } catch (Exception e) {
-            promise.reject("error signing payload: " + e.getMessage(), "error generating signature");
+            promise.reject("Error signing payload: " + e.getMessage(), "Error generating signature");
         }
+    }
+
+    @ReactMethod
+    public void simplePrompt(String title, Promise promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ReactNativeBiometricsDialog dialog = new ReactNativeBiometricsDialog();
+                dialog.init(title, null, getSimplePromptCallback(promise));
+                Activity activity = getCurrentActivity();
+                dialog.show(activity.getFragmentManager(), "fingerprint_dialog");
+            } else {
+                promise.reject("Cannot display biometric prompt on android versions below 6.0", "Cannot display biometric prompt on android versions below 6.0");
+            }
+        } catch (Exception e) {
+            promise.reject("Error displaying local biometric prompt: " + e.getMessage(), "Error displaying local biometric prompt");
+        }
+    }
+
+    protected boolean biometricKeyExists() {
+      try {
+        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+        keyStore.load(null);
+
+        return keyStore.containsAlias(biometricKeyAlias);
+      } catch (Exception e) {
+        return false;
+      }
     }
 
     protected boolean deleteBiometricKey() {
@@ -159,7 +182,7 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
                     signedString = signedString.replaceAll("\r", "").replaceAll("\n", "");
                     promise.resolve(signedString);
                 } catch (Exception e) {
-                    promise.reject("error creating signature: " + e.getMessage(), "error creating signature");
+                    promise.reject("Error creating signature: " + e.getMessage(), "Error creating signature");
                 }
             }
 
@@ -170,32 +193,16 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
 
             @Override
             public void onError() {
-                promise.reject("error detecting fingerprint", "error detecting fingerprint");
+                promise.reject("Error detecting fingerprint", "Error detecting fingerprint");
             }
         };
     }
 
-    protected void resolveSuccessPromise(final String resolvedKey, final Promise promise) {
-        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                promise.resolve(resolvedKey);
-            }
-        }, SUCCESS_DELAY_MILLIS);
-    }
-
-    protected ReactNativeBiometricsCallback getCreationCallback(final Promise promise, final boolean withKey) {
+    protected ReactNativeBiometricsCallback getCreationCallback(final Promise promise) {
         return new ReactNativeBiometricsCallback() {
-            boolean isResolved = false;
             @Override
             @TargetApi(Build.VERSION_CODES.M)
             public void onAuthenticated(FingerprintManager.CryptoObject cryptoObject) {
-                if (isResolved) return;
-                if (!withKey) {
-                    isResolved = true;
-                    resolveSuccessPromise(null, promise);
-                    return;
-                }
                 try {
                     deleteBiometricKey();
                     KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore");
@@ -212,28 +219,39 @@ public class ReactNativeBiometrics extends ReactContextBaseJavaModule {
                     byte[] encodedPublicKey = publicKey.getEncoded();
                     String publicKeyString = Base64.encodeToString(encodedPublicKey, Base64.DEFAULT);
                     publicKeyString = publicKeyString.replaceAll("\r", "").replaceAll("\n", "");
-                    isResolved = true;
-                    resolveSuccessPromise(publicKeyString, promise);
+                    promise.resolve(publicKeyString);
                 } catch (Exception e) {
-                    isResolved = true;
-                    promise.reject("error generating public private keys: " + e.getMessage(), "error generating public private keys");
+                    promise.reject("Error generating public private keys: " + e.getMessage(), "Error generating public private keys");
                 }
             }
 
             @Override
             public void onCancel() {
-                if (!isResolved) {
-                    isResolved = true;
-                    promise.reject("User cancelled fingerprint authorization", "User cancelled fingerprint authorization");
-                }
+                promise.reject("User cancelled fingerprint authorization", "User cancelled fingerprint authorization");
             }
 
             @Override
             public void onError() {
-                if (!isResolved) {
-                    isResolved = true;
-                    promise.reject("error generating public private keys" , "error generating public private keys");
-                }
+                promise.reject("Error generating public private keys" , "Error generating public private keys");
+            }
+        };
+    }
+
+    protected ReactNativeBiometricsCallback getSimplePromptCallback(final Promise promise) {
+        return new ReactNativeBiometricsCallback() {
+            @Override
+            public void onAuthenticated(FingerprintManager.CryptoObject cryptoObject) {
+                promise.resolve(true);
+            }
+
+            @Override
+            public void onCancel() {
+                promise.reject("User cancelled fingerprint authorization", "User cancelled fingerprint authorization");
+            }
+
+            @Override
+            public void onError() {
+                promise.reject("Error generating public private keys" , "Error generating public private keys");
             }
         };
     }

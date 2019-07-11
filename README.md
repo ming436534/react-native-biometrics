@@ -23,7 +23,7 @@ React native biometrics is a simple bridge to native iOS and Android keystore ma
 
 #### Android
 
-1. Open up `android/app/src/main/java/[...]/MainActivity.java`
+1. Open up `android/app/src/main/java/[...]/MainApplication.java`
   - Add `import com.rnbiometrics.ReactNativeBiometricsPackage;` to the imports at the top of the file
   - Add `new ReactNativeBiometricsPackage()` to the list returned by the `getPackages()` method
 2. Append the following lines to `android/settings.gradle`:
@@ -43,8 +43,6 @@ React native biometrics is a simple bridge to native iOS and Android keystore ma
 This package requires an iOS target SDK verion of iOS 10 or higher
 
 Ensure that you have the `NSFaceIDUsageDescription` entry set in your react native iOS project, or Face ID will not work properly.  This description will be will be presented to the user the first time a biometrics action is taken, and the user will be asked if they want to allow the app to use Face ID.  If the user declines the usage of face id for the app, the `isSensorAvailable` function will return `null` until the face id permission is specifically allowed for the app by the user.
-
-NOTE: No biometric prompt is displayed in iOS simulators when attempting to retrieve keys for signature generation, it only occurs on actual devices.
 
 #### Android
 
@@ -111,13 +109,13 @@ Biometrics.isSensorAvailable()
   })
 ```
 
-### createKeys(promptMessage)
+### createKeys([promptMessage])
 
 Prompts the user for their fingerprint or face id, then generates a public private RSA 2048 key pair that will be stored in the device keystore.  Returns a `Promise` that resolves to a base64 encoded string representing the public key.
 
 __Arguments__
 
-- `promptMessage` - string that will be displayed in the fingerprint or face id prompt
+- `promptMessage` - optional string that will be displayed in the fingerprint or face id prompt, if no prompt message is provided, no prompt will be displayed.
 
 __Example__
 
@@ -154,6 +152,8 @@ Biometrics.deleteKeys()
 
 Prompts the user for their fingerprint or face id in order to retrieve the private key from the keystore, then uses the private key to generate a RSA PKCS#1v1.5 SHA 256 signature.  Returns a `Promise` that resolves to a base64 encoded string representing the signature.
 
+NOTE: No biometric prompt is displayed in iOS simulators when attempting to retrieve keys for signature generation, it only occurs on actual devices.
+
 __Arguments__
 
 - `promptMessage` - string that will be displayed in the fingerprint or face id prompt
@@ -171,5 +171,29 @@ Biometrics.createSignature('Sign in', payload)
   .then((signature) => {
     console.log(signature)
     verifySignatureWithServer(signature, payload)
+  })
+```
+
+### simplePrompt(promptMessage)
+
+Prompts the user for their fingerprint or face id. Returns a `Promise` that resolves if the user provides a valid fingerprint or face id, otherwise the promise rejects.
+
+NOTE: This only validates a user's biometrics.  This should not be used to log a user in or authenticate with a server, instead use `createSignature`.  It should only be used to gate certain user actions within an app.
+
+__Arguments__
+
+- `promptMessage` - string that will be displayed in the fingerprint or face id prompt
+
+__Example__
+
+```js
+import Biometrics from 'react-native-biometrics'
+
+Biometrics.simplePrompt('Confirm fingerprint')
+  .then(() => {
+    console.log('successful fingerprint provided')
+  })
+  .catch(() => {
+    console.log('fingerprint failed or prompt was cancelled')
   })
 ```
